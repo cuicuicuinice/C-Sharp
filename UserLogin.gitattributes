@@ -1,0 +1,125 @@
+﻿using System;
+using System.Configuration;
+using System.Data.SqlClient;
+using System.Data;
+using System.Windows.Forms;
+
+namespace UserLogin
+{
+    class Verifiction
+    {
+        /// <summary>
+        /// 数据库连接以及判断
+        /// </summary>
+        /// <param name="UsId">用户名</param>
+        /// <param name="Pwd">登录密码</param>
+        /// <returns></returns>
+       public int DatabaseConn(string UsId,string Pwd)
+        {
+            using (SqlConnection conn = new SqlConnection(ConfigurationManager.ConnectionStrings["sql1"].ConnectionString))
+            {
+                conn.Open();
+                using (SqlCommand comm = new SqlCommand())
+                {
+                    UserInfo userInfo = null;
+                    comm.CommandTimeout = 4;
+                    comm.Connection = conn;
+                    comm.CommandType = CommandType.Text;
+                    comm.CommandText = "select * from UserLogin where UsAccount=@UsAcount";
+                    comm.Parameters.AddWithValue("@UsAcount", UsId);
+                    comm.Parameters.AddWithValue("@UsPassWord", Pwd);
+
+                    using (SqlDataReader datareader = comm.ExecuteReader())
+                    {
+                        
+                        if(datareader.Read())
+                        {
+                            userInfo = new UserInfo
+                            {
+                                UserId = Convert.ToInt16(datareader["UsId"]),
+                                UserName = datareader["UsAccount"].ToString(),
+                                UserPwd = datareader["UsPassWord"].ToString(),
+                                ErrorTime = Convert.ToInt16(datareader["UsErrorTime"]),
+                                LastDataTime = Convert.ToDateTime(datareader["UsLastDateTime"])
+                            };
+                        }
+                    }
+
+
+                    if(userInfo != null)
+                    {
+                        if (userInfo.ErrorTime >= 3)
+                        {
+                            if (DateTime.Now.Subtract(userInfo.LastDataTime).Seconds > 15)
+                            {
+                                InitialErrorTimeAndDate(comm, userInfo);
+                            }
+                            else
+                            {
+                                return 2;
+                            }
+                        }
+
+                        if (userInfo.UserPwd != Pwd)
+                        {
+                             AddErrorTimeAndDate(comm, userInfo);
+                            return 1;
+                        }
+                        else
+                        {
+                            return 0;
+                        }
+                    }
+                    else
+                    {
+                        return 1;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 初始化时错误次数
+        /// </summary>
+        /// <param name="comm">执行语句</param>
+        /// <param name="userInfo">用户属性类</param>
+        private void InitialErrorTimeAndDate(SqlCommand comm, UserInfo userInfo)
+        {
+            comm.CommandText = "update UserLogin set UsErrorTime=0,UsLastDateTime='1960-1-1 00:00:00.000' where UsId=@UsId";
+            comm.Parameters.AddWithValue("@UsId", userInfo.UserId);
+            comm.ExecuteNonQuery();
+        }
+
+        /// <summary>
+        /// 增加错误次数和时间
+        /// </summary>
+        /// <param name="comm">执行语句</param>
+        /// <param name="userInfo">用户属性类</param>
+        private void AddErrorTimeAndDate(SqlCommand comm,UserInfo userInfo)
+        {
+            comm.CommandText = "update UserLogin set UsErrorTime=@UsErrorTime,UsLastDateTime=getdate() where UsId=@UsId";
+            comm.Parameters.AddWithValue("@UsErrorTime", userInfo.ErrorTime + 1);
+            comm.Parameters.AddWithValue("@UsId", userInfo.UserId);
+            comm.ExecuteNonQuery();
+            comm.CommandText = "insert into ErrorDateils(ErrorDateTime) values (getDate())";
+            comm.ExecuteNonQuery();
+            
+        }
+
+        /// <summary>
+        /// 登录结果判定工厂
+        /// </summary>
+        /// <param name="UsId">用户账号</param>
+        /// <param name="UsPassWord">用户密码</param>
+        public void LoginStateFactory(string UsId,string UsPassWord)
+        {
+           int LoginStateCode= DatabaseConn(UsId, UsPassWord);
+            switch(LoginStateCode)
+            {
+                case 0:MessageBox.Show("登录成功"); break;
+                case 1:MessageBox.Show("账号或密码错误"); break;
+                case 2:MessageBox.Show("账号已经被锁定"); break;
+            }
+        }
+    }
+}
