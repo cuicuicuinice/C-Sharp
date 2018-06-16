@@ -117,7 +117,7 @@ namespace UserLogin
             switch(LoginStateCode)
             {
                 case 0:MessageBox.Show("登录成功"); break;
-                case 1:MessageBox.Show("账号或密码错误"); break;
+                case 1:MessageBox.Show("账号或密码错误"); break ;
                 case 2:MessageBox.Show("账号已经被锁定"); break;
             }
         }
